@@ -100,6 +100,22 @@ function showAuthModal() {
         reportContainer.innerHTML = '';
     }
     
+    // Clear form inputs
+    const batchNameInput = document.getElementById('batchName');
+    if (batchNameInput) {
+        batchNameInput.value = '';
+    }
+    
+    const fileUploadInput = document.getElementById('fileUpload');
+    if (fileUploadInput) {
+        fileUploadInput.value = '';
+    }
+    
+    const fileNameDisplay = document.getElementById('fileName');
+    if (fileNameDisplay) {
+        fileNameDisplay.textContent = 'No file selected';
+    }
+    
     // Reset other UI elements
     document.getElementById('trainer-selector-container').classList.add('hidden');
     document.getElementById('trainer-name-container').classList.add('hidden');
@@ -122,6 +138,22 @@ async function showMainApp() {
     const reportContainer = document.getElementById('report-container');
     if (reportContainer) {
         reportContainer.innerHTML = '';
+    }
+    
+    // Clear form inputs
+    const batchNameInput = document.getElementById('batchName');
+    if (batchNameInput) {
+        batchNameInput.value = '';
+    }
+    
+    const fileUploadInput = document.getElementById('fileUpload');
+    if (fileUploadInput) {
+        fileUploadInput.value = '';
+    }
+    
+    const fileNameDisplay = document.getElementById('fileName');
+    if (fileNameDisplay) {
+        fileNameDisplay.textContent = 'No file selected';
     }
     
     // Reset other UI elements
@@ -367,6 +399,7 @@ document.getElementById('addQuestionBtn').addEventListener('click', addQuestion)
 
 
 const ratingScores = { 'Excellent': 5, 'Very Good': 4, 'Good': 3, 'Average': 2, 'Poor': 1 };
+const ratingOrder = ['Excellent', 'Very Good', 'Good', 'Average', 'Poor'];
 
 // --- TAB NAVIGATION ---
 function openTab(evt, tabName) {
@@ -669,7 +702,14 @@ async function processSingleTrainerReport(data) {
         return;
     }
 
-    if (questionHeaders.length !== reportQuestions.length && reportQuestions.length > 0) {
+    // Check if user has no questions added
+    if (reportQuestions.length === 0) {
+        alert("No questions added!\n\nPlease go to the 'Manage Questions' tab and add at least one feedback question before generating reports.");
+        return;
+    }
+
+    // Check if number of questions match
+    if (questionHeaders.length !== reportQuestions.length) {
         const shouldContinue = confirm(
             `Warning: Mismatch detected!\n\n` +
             `• Excel file has ${questionHeaders.length} question columns\n` +
@@ -733,21 +773,25 @@ async function processMultiTrainerReport(data) {
     );
     const trainerNames = [...new Set(potentialTrainerHeaders.map(h => h.replace(/\d/g, '').trim()))];
 
+    // Check if user has no questions added
+    if (reportQuestions.length === 0) {
+        alert("No questions added!\n\nPlease go to the 'Manage Questions' tab and add at least one feedback question before generating reports.");
+        return;
+    }
+
     // Check question count mismatch for multi-trainer files
-    if (reportQuestions.length > 0) {
-        // Get the first trainer's question count as reference
-        const firstTrainerQuestions = headers.filter(h => h.replace(/\d/g, '').trim() === trainerNames[0]);
-        if (firstTrainerQuestions.length !== reportQuestions.length) {
-            const shouldContinue = confirm(
-                `Warning: Mismatch detected!\n\n` +
-                `• Excel file has ${firstTrainerQuestions.length} question columns per trainer\n` +
-                `• You have ${reportQuestions.length} questions stored\n\n` +
-                `This may cause incomplete or inaccurate reports.\n\n` +
-                `Do you want to continue anyway?`
-            );
-            if (!shouldContinue) {
-                return;
-            }
+    // Get the first trainer's question count as reference
+    const firstTrainerQuestions = headers.filter(h => h.replace(/\d/g, '').trim() === trainerNames[0]);
+    if (firstTrainerQuestions.length !== reportQuestions.length) {
+        const shouldContinue = confirm(
+            `Warning: Mismatch detected!\n\n` +
+            `• Excel file has ${firstTrainerQuestions.length} question columns per trainer\n` +
+            `• You have ${reportQuestions.length} questions stored\n\n` +
+            `This may cause incomplete or inaccurate reports.\n\n` +
+            `Do you want to continue anyway?`
+        );
+        if (!shouldContinue) {
+            return;
         }
     }
 
@@ -1007,7 +1051,8 @@ function renderReport(reportData, options) {
                 <div class="feedback-card">
                     <h3>${a.question}</h3>
                     <div class="ratings-container">
-                        ${Object.entries(a.counts).map(([r, c]) => {
+                        ${ratingOrder.map(r => {
+                            const c = a.counts[r] || 0;
                             const voters = (a.voters && a.voters[r]) ? a.voters[r] : [];
                             const votersList = voters.length > 0
                                 ? `<ul class=\"tooltip-list\">${voters.map(v => `<li>${String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</li>`).join('')}</ul>`
