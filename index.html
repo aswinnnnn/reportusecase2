@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Report Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Firebase Libraries -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // CORRECTED: Added query, orderBy, and serverTimestamp to the import
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, setDoc, setLogLevel, query, orderBy, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose all necessary functions to the global scope
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            onAuthStateChanged,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut,
+            getFirestore,
+            collection,
+            onSnapshot,
+            addDoc,
+            deleteDoc,
+            doc,
+            setDoc,
+            setLogLevel,
+            query,
+            orderBy,
+            serverTimestamp,
+            getDoc
+        };
+    </script>
+    <!-- Gemini API Key (Set your key below) -->
+    <script>
+        // Place your Gemini API key here. Example: window.__GEMINI_API_KEY = "AIza...";
+        window.__GEMINI_API_KEY = "AIzaSyDAmq60TrOWkmzRr-uwHXb0_A2jlV8BlEY"; // TODO: Paste your Gemini 2.5 Flash API key
+    </script>
+</head>
+
+<body>
+    <!-- Login/Signup Modal -->
+    <div id="authModal" class="auth-modal" style="display: none;">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1>Feedback Report Generator</h1>
+                <p>Please sign in to continue</p>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <h2>Sign In</h2>
+                <form id="loginFormElement">
+                    <div class="input-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" required placeholder="Enter your email">
+                    </div>
+                    <div class="input-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" required placeholder="Enter your password">
+                    </div>
+                    <button type="submit" class="auth-button primary">Sign In</button>
+                </form>
+                <p class="auth-switch">
+                    Don't have an account? 
+                    <a href="#" id="showSignup">Sign up</a>
+                </p>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form hidden">
+                <h2>Sign Up</h2>
+                <form id="signupFormElement">
+                    <div class="input-group">
+                        <label for="signupName">Full Name</label>
+                        <input type="text" id="signupName" required placeholder="Enter your full name">
+                    </div>
+                    <div class="input-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="Enter your email">
+                    </div>
+                    <div class="input-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" required placeholder="Create a password" minlength="6">
+                    </div>
+                    <div class="input-group">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input type="password" id="confirmPassword" required placeholder="Confirm your password">
+                    </div>
+                    <button type="submit" class="auth-button primary">Sign Up</button>
+                </form>
+                <p class="auth-switch">
+                    Already have an account? 
+                    <a href="#" id="showLogin">Sign in</a>
+                </p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="authLoading" class="auth-loading hidden">
+                <div class="spinner"></div>
+                <p>Processing...</p>
+            </div>
+
+            <!-- Error Message -->
+            <div id="authError" class="auth-error hidden">
+                <p id="authErrorMessage"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <svg class="header-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <h1>Feedback Report Generator</h1>
+            </div>
+            <div class="header-right">
+                <span id="userName" class="user-info"></span>
+                <button id="logoutBtn" class="logout-button">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <button class="tab-link active" onclick="openTab(event, 'GeneratorTab')">Report Generator</button>
+                <button class="tab-link" onclick="openTab(event, 'QuestionsTab')">Manage Questions</button>
+                <button class="tab-link" onclick="openTab(event, 'ReportsTab')">Past Reports</button>
+            </div>
+
+            <div id="GeneratorTab" class="tab-content" style="display: block;">
+                <div class="card" id="upload-card">
+                    <p class="tab-description">Upload an Excel feedback file to automatically generate a professional
+                        report.</p>
+                    <div class="input-grid">
+                        <div class="input-group full-width">
+                            <label for="batchName">Batch Name (Optional)</label>
+                            <input type="text" id="batchName" placeholder="e.g., ILP 2024-25 Batch">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="fileUpload">Upload Excel File</label>
+                        <div class="file-upload-wrapper">
+                            <input type="file" id="fileUpload" accept=".xlsx, .xls, .csv">
+                            <label for="fileUpload" class="file-upload-label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>Click to upload or drag and drop</span>
+                            </label>
+                            <span id="fileName" class="file-name">No file selected</span>
+                        </div>
+                    </div>
+
+                    <div id="loading" class="hidden">
+                        <div class="spinner"></div>
+                        <p>Processing your file, please wait...</p>
+                    </div>
+                </div>
+
+                <div id="trainer-name-container" class="card hidden">
+                    <h2>Enter Trainer's Name</h2>
+                    <div class="input-group">
+                        <input type="text" id="trainerName" placeholder="Trainer's full name">
+                    </div>
+                    <button id="generateSingleReportBtn" class="action-button">Generate Report</button>
+                </div>
+
+                <div id="trainer-selector-container" class="card hidden">
+                    <h2>Select a Trainer</h2>
+                    <div class="input-group">
+                        <select id="trainerSelector">
+                            <option value="">-- Please Select --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="report-container"></div>
+            </div>
+
+            <div id="QuestionsTab" class="tab-content">
+                <div class="card">
+                    <p class="tab-description">Add or remove the feedback questions that will be used to generate
+                        reports. The order here should match the order of question columns in your Excel files.</p>
+                    <h2>Add a New Question</h2>
+                    <div class="input-group add-question-group">
+                        <input type="text" id="newQuestionInput" placeholder="Enter a new feedback question">
+                        <button id="addQuestionBtn" class="action-button">Add</button>
+                    </div>
+                    <hr>
+                    <h2>Current Questions</h2>
+                    <div id="questionsList">
+                        <p>Loading questions...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ReportsTab" class="tab-content">
+                <div class="card">
+                    <p class="tab-description">Browse previously generated reports. Click to view or delete.</p>
+                    <h2>Saved Reports</h2>
+                    <div id="reportsLoading" class="hidden">
+                        <div class="spinner"></div>
+                        <p>Loading saved reports...</p>
+                    </div>
+                    <div id="reportsList" class="reports-grid">
+                        <p>Loading reports...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- Fullscreen Loading Overlay for Summarization -->
+    <div id="global-loading" class="loading-large hidden">
+        <div class="loading-card">
+            <div class="spinner"></div>
+            <p>Generating report...</p>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
