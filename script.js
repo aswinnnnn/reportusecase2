@@ -94,6 +94,17 @@ function showAuthModal() {
     hideError();
     hideLoading();
     
+    // Clear report container when logging out
+    const reportContainer = document.getElementById('report-container');
+    if (reportContainer) {
+        reportContainer.innerHTML = '';
+    }
+    
+    // Reset other UI elements
+    document.getElementById('trainer-selector-container').classList.add('hidden');
+    document.getElementById('trainer-name-container').classList.add('hidden');
+    document.getElementById('loading').classList.add('hidden');
+    
     // Ensure login form is visible by default
     currentForm = 'login';
     showLoginForm();
@@ -106,6 +117,17 @@ async function showMainApp() {
     
     authModal.style.display = 'none';
     container.classList.remove('hidden');
+    
+    // Clear report container when signing in
+    const reportContainer = document.getElementById('report-container');
+    if (reportContainer) {
+        reportContainer.innerHTML = '';
+    }
+    
+    // Reset other UI elements
+    document.getElementById('trainer-selector-container').classList.add('hidden');
+    document.getElementById('trainer-name-container').classList.add('hidden');
+    document.getElementById('loading').classList.add('hidden');
     
     // Update user info in header
     if (currentUser) {
@@ -359,8 +381,17 @@ function openTab(evt, tabName) {
     }
     document.getElementById(tabName).style.display = "block";
     evt.currentTarget.className += " active";
+    
     if (tabName === 'ReportsTab') {
         loadSavedReports();
+    } else if (tabName === 'GeneratorTab') {
+        // Focus on report container if it has content
+        const reportContainer = document.getElementById('report-container');
+        if (reportContainer && reportContainer.innerHTML.trim() !== '') {
+            setTimeout(() => {
+                reportContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
     }
 }
 // --- PAST REPORTS ---
@@ -368,7 +399,7 @@ let reportsUnsubscribe = null;
 async function loadSavedReports() {
     const list = document.getElementById('reportsList');
     const loader = document.getElementById('reportsLoading');
-    if (!list || !db) return;
+    if (!list || !db || !currentUser) return;
     list.innerHTML = '<p>Loading reports...</p>';
     if (loader) loader.classList.remove('hidden');
     // cleanup existing listener
@@ -376,7 +407,7 @@ async function loadSavedReports() {
         try { reportsUnsubscribe(); } catch (_) {}
         reportsUnsubscribe = null;
     }
-    const reportsCol = window.firebase.collection(db, `artifacts/${appId}/public/data/reports`);
+    const reportsCol = window.firebase.collection(db, `users/${currentUser.uid}/reports`);
     const renderSnapshot = (snapshot) => {
         if (loader) loader.classList.add('hidden');
         const items = [];
@@ -423,7 +454,7 @@ async function loadSavedReports() {
 }
 async function viewSavedReport(id) {
     try {
-        const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/reports`, id);
+        const docRef = window.firebase.doc(db, `users/${currentUser.uid}/reports`, id);
         const snap = await window.firebase.getDoc(docRef);
         if (!snap.exists()) { alert('Report not found.'); return; }
         const data = snap.data();
@@ -448,10 +479,10 @@ async function viewSavedReport(id) {
     }
 }
 async function deleteSavedReport(id) {
-    if (!isAuthenticated) { alert('Delete requires authentication.'); return; }
+    if (!isAuthenticated || !currentUser) { alert('Delete requires authentication.'); return; }
     if (!confirm('Delete this saved report?')) return;
     try {
-        const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/reports`, id);
+        const docRef = window.firebase.doc(db, `users/${currentUser.uid}/reports`, id);
         await window.firebase.deleteDoc(docRef);
     } catch (e) {
         alert('Failed to delete report.');
@@ -463,8 +494,8 @@ window.openTab = openTab;
 
 // --- FIREBASE QUESTION MANAGEMENT ---
 async function fetchQuestions() {
-    if (!db) return;
-    const questionsCollection = window.firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+    if (!db || !currentUser) return;
+    const questionsCollection = window.firebase.collection(db, `users/${currentUser.uid}/questions`);
     const q = window.firebase.query(questionsCollection, window.firebase.orderBy("createdAt", "asc"));
 
     window.firebase.onSnapshot(q, (snapshot) => {
@@ -503,12 +534,12 @@ async function addQuestion() {
         alert("Please enter a question.");
         return;
     }
-    if (!isAuthenticated) {
-        alert("Adding questions is disabled because authentication is not available. Ask an admin to enable anonymous auth or sign-in.");
+    if (!isAuthenticated || !currentUser) {
+        alert("Adding questions is disabled because authentication is not available.");
         return;
     }
     try {
-        const questionsCollection = window.firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+        const questionsCollection = window.firebase.collection(db, `users/${currentUser.uid}/questions`);
         await window.firebase.addDoc(questionsCollection, {
             text: questionText,
             createdAt: window.firebase.serverTimestamp()
@@ -522,12 +553,12 @@ async function addQuestion() {
 
 async function deleteQuestion(id) {
     if (!confirm("Are you sure you want to delete this question?")) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !currentUser) {
         alert("Deleting questions is disabled because authentication is not available.");
         return;
     }
     try {
-        const questionDoc = window.firebase.doc(db, `artifacts/${appId}/public/data/questions`, id);
+        const questionDoc = window.firebase.doc(db, `users/${currentUser.uid}/questions`, id);
         await window.firebase.deleteDoc(questionDoc);
     } catch (error) {
         console.error("Error deleting question: ", error);
@@ -946,6 +977,14 @@ function switchToTab(tabName) {
     // Handle tab-specific logic
     if (tabName === 'ReportsTab') {
         loadSavedReports();
+    } else if (tabName === 'GeneratorTab') {
+        // Focus on report container if it has content
+        const reportContainer = document.getElementById('report-container');
+        if (reportContainer && reportContainer.innerHTML.trim() !== '') {
+            setTimeout(() => {
+                reportContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
     }
 }
 
@@ -1074,9 +1113,9 @@ function renderReport(reportData, options) {
         reportWindow.document.write(newWindowContent);
         reportWindow.document.close();
         // Save report metadata to Firestore (best-effort)
-        if (opts.save) {
+        if (opts.save && currentUser) {
             try {
-                const reportsCol = window.firebase.collection(db, `artifacts/${appId}/public/data/reports`);
+                const reportsCol = window.firebase.collection(db, `users/${currentUser.uid}/reports`);
                 const timestamp = new Date();
                 const docBody = {
                     batchName,

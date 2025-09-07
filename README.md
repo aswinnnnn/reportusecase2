@@ -5,9 +5,10 @@ A web application for generating feedback reports from Excel files with user aut
 ## Features
 
 - **User Authentication**: Sign up and sign in with email and password using Firebase Authentication
+- **User-Specific Data**: Each user has their own private questions and reports
 - **Report Generation**: Upload Excel files and generate professional feedback reports
-- **Question Management**: Add and manage feedback questions
-- **Report History**: View and manage previously generated reports
+- **Question Management**: Add and manage your own feedback questions
+- **Report History**: View and manage your previously generated reports
 - **Responsive Design**: Modern, clean interface that works on all devices
 
 ## Getting Started
@@ -74,14 +75,16 @@ A web application for generating feedback reports from Excel files with user aut
 ### Managing Questions
 
 1. Go to the "Manage Questions" tab
-2. Add new questions using the input field
+2. Add new questions using the input field (these are private to your account)
 3. Delete existing questions using the trash icon
+4. Each user has their own set of questions
 
 ### Viewing Past Reports
 
 1. Go to the "Past Reports" tab
-2. View previously generated reports
+2. View your previously generated reports (private to your account)
 3. Delete reports you no longer need
+4. Each user can only see their own reports
 
 ## File Format
 
